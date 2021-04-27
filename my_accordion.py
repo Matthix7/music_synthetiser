@@ -28,8 +28,14 @@ def get_freq_from(note):
 ############################   Keyboard monitoring   #######################################
 
 def get_note_from(key):
-	try:
-		if key.char == 'q':
+	try:		
+		if key.char == 'a':
+			note = 'Mi2'
+
+		if key.char == 'é':
+			note = 'Fa2'
+
+		elif key.char == 'q':
 			note = 'Fa#2'
 
 		elif key.char == 'z':
@@ -138,7 +144,7 @@ def get_note_from(key):
 def get_sound_from_freq(time, freqs_played):
 	sound = 0*time
 	for freq in freqs_played:
-		sound += np.sin(2*np.pi*time*freq)
+		sound += np.sin(2*np.pi*time*freq) + 0.3 * np.sin(2*np.pi*time*freq*2**(-1)) + 0.1 * np.sin(2*np.pi*time*freq*2**(1))
 	return sound
 
 
@@ -148,7 +154,7 @@ def on_press(key):
 
 	note = get_note_from(key)
 	frequency = get_freq_from(note)
-
+	print("Note played: ", note)
 	if frequency not in freqs_played:
 		freqs_played.append(frequency)
 
@@ -190,7 +196,7 @@ def main():
 	global end, start_idx, freqs_played, volume, sample_rate
 
 	### Variables initialisation
-	volume = 0.5    # range [0.0, 1.0]
+	volume = 0.1    # range [0.0, 1.0]
 	sample_rate = 44100       # sampling rate, Hz, must be integer
 	end = False
 	start_idx = 0
