@@ -27,6 +27,8 @@ class Accordion():
 		self.end = False
 		self.start_idx = 0
 		self.freqs_played = []
+		self.crescendo_beginning = []
+		self.decrescendo_beginning =[]
 		self.crescendo_ended = []
 		self.decrescendo_ended =[]
 		self.freqs_crescendo = dict() # {freq : [press_time, volume, current_volume]}
@@ -103,6 +105,16 @@ class Accordion():
 		harmonics = self.get_harmonics(self.sound_library) 
 		# print(self.freqs_crescendo, self.freqs_played, self.freqs_decrescendo)
 
+
+		for frequency, press_time, initial_volume, current_volume in self.crescendo_beginning:
+			self.freqs_crescendo[frequency] = [press_time, initial_volume, current_volume]
+		self.crescendo_beginning = []
+
+		for frequency, press_time, initial_volume, current_volume in self.decrescendo_beginning:
+			self.freqs_decrescendo[frequency] = [press_time, initial_volume, current_volume]
+		self.decrescendo_beginning = []
+
+
 		for freq in self.freqs_played:
 			new_sound += np.sin(2*np.pi*sample_time*freq)
 			for alpha_n, power in harmonics:
@@ -140,7 +152,6 @@ class Accordion():
 			self.freqs_decrescendo.pop(freq, None)
 		self.decrescendo_ended = []
 
-
 		return new_sound
 
 
@@ -154,7 +165,7 @@ class Accordion():
 			if frequency in self.freqs_decrescendo:
 				self.decrescendo_ended.append(frequency)
 				volume = self.freqs_decrescendo[frequency][2]
-			self.freqs_crescendo[frequency] = [time.time(), volume, volume]
+			self.crescendo_beginning.append([frequency, time.time(), volume, volume])
 			self.keys_pressed.append(key)
 			self.notes_played.append(note)
 
@@ -168,6 +179,7 @@ class Accordion():
 			if frequency in self.freqs_crescendo:
 				self.crescendo_ended.append(frequency)
 				volume = self.freqs_crescendo[frequency][2]
+			self.decrescendo_beginning.append([frequency, time.time(), volume, volume])
 			self.freqs_decrescendo[frequency] = [time.time(), volume, volume]
 			self.keys_pressed.remove(key)
 			self.notes_played.remove(note)
@@ -225,7 +237,7 @@ class Accordion():
 if __name__ == "__main__":
 	# "diapason", "accordion", "carillon", "custom_synthetiser"
 	# "single", "double"
-	my_accordion = Accordion(sound_library = "custom_synthetiser", configuration = "double")
+	my_accordion = Accordion(sound_library = "accordion", configuration = "double")
 
 	with sd.OutputStream(channels=2, callback=my_accordion.sound_generation_callback, samplerate=my_accordion.sample_rate):
 
