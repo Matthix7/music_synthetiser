@@ -24,11 +24,12 @@ class Accordion():
 	
 	def __init__(self, sound_library, configuration):
 		### Variables initialisation
-		self.volume = 0.1    # range [0.0, 1.0], keep low to avoid saturation
+		self.volume = 0.05    # range [0.0, 1.0], keep low to avoid saturation
 		self.end = False
 		self.start_idx = 0
 		self.freqs_played = []
-		self.freqs_decrescendo = []
+		self.freqs_crescendo = dict() # {freq : [press_time, volume, current_volume]}
+		self.freqs_decrescendo = dict() # {freq : [release_time, volume, current_volume]}
 		self.notes_played = []
 		self.keys_pressed = []
 		self.volumes_of_notes = {}
@@ -40,12 +41,16 @@ class Accordion():
 
 		self.sound_library = sound_library
 		if sound_library == "diapason":
-			self.decrescendo_duration = 0.5
+			self.crescendo_duration = 1
+			self.decrescendo_duration = 2
 		if sound_library == "accordion":
+			self.crescendo_duration = 0.01
 			self.decrescendo_duration = 0.2
 		if sound_library == "carillon":
+			self.crescendo_duration = 0.01
 			self.decrescendo_duration = 0.8
 		if sound_library == "orgue_synthé":
+			self.crescendo_duration = 0.05
 			self.decrescendo_duration = 0.2
 
 
@@ -91,22 +96,43 @@ class Accordion():
 	def get_sound_from_freq(self, sample_time):
 		new_sound = 0*sample_time
 		harmonics = self.get_harmonics(self.sound_library) 
+		crescendo_ended = []
+		decrescendo_ended = []
+		# print(self.freqs_crescendo, self.freqs_played, self.freqs_decrescendo)
 
 		for freq in self.freqs_played:
-			new_sound += np.sin(2*np.pi*sample_time*freq) 
-
+			new_sound += np.sin(2*np.pi*sample_time*freq)
 			for alpha_n, power in harmonics:
 				new_sound += power * np.sin(2*np.pi*sample_time*freq*alpha_n)
 
-		for freq, release_time in self.freqs_decrescendo:
-			volume = np.exp(-(time.time()-release_time)/self.decrescendo_duration)
-			new_sound += volume * np.sin(2*np.pi*sample_time*freq)
 
+		for freq in self.freqs_crescendo:
+			press_time, initial_volume, current_volume = self.freqs_crescendo[freq]
+			volume = 1 - (1-initial_volume) * np.exp(-(time.time()-press_time)/self.crescendo_duration)
+			self.freqs_crescendo[freq][2] = volume
+			new_sound += volume * np.sin(2*np.pi*sample_time*freq)
 			for alpha_n, power in harmonics:
 				new_sound += volume * power * np.sin(2*np.pi*sample_time*freq*alpha_n)
+			if volume > 0.99:
+				crescendo_ended.append(freq)
 
-			if volume < 0.005:
-				self.freqs_decrescendo.remove((freq, release_time))
+		for freq in crescendo_ended:
+			del self.freqs_crescendo[freq]
+			self.freqs_played.append(freq)
+
+
+		for freq in self.freqs_decrescendo: 
+			release_time, initial_volume, current_volume = self.freqs_decrescendo[freq]
+			volume = initial_volume * np.exp(-(time.time()-release_time)/self.decrescendo_duration)
+			self.freqs_decrescendo[freq][2] = volume
+			new_sound += volume * np.sin(2*np.pi*sample_time*freq)
+			for alpha_n, power in harmonics:
+				new_sound += volume * power * np.sin(2*np.pi*sample_time*freq*alpha_n)
+			if volume < 0.01:
+				decrescendo_ended.append(freq)
+
+		for freq in decrescendo_ended:
+			del self.freqs_decrescendo[freq]
 
 		return new_sound
 
@@ -116,26 +142,30 @@ class Accordion():
 		note = self.get_note_from_key(key)
 		frequency = self.get_freq_from_note(note)
 
-		if frequency not in self.freqs_played:
-			self.freqs_played.append(frequency)		
-			self.notes_played.append(note)
+		if frequency not in self.freqs_crescendo.keys() and frequency not in self.freqs_played:
+			volume = 0
+			if frequency in self.freqs_decrescendo:
+				volume = self.freqs_decrescendo[frequency][2]
+			self.freqs_crescendo[frequency] = [time.time(), volume, volume]
 			self.keys_pressed.append(key)
-
-		if frequency in self.freqs_decrescendo:
-			self.freqs_decrescendo.remove(frequency)
+			self.notes_played.append(note)
+			self.freqs_decrescendo.pop(frequency, None)
 
 
 	def on_release(self, key):
 		note = self.get_note_from_key(key)
 		frequency = self.get_freq_from_note(note)
 
-		if frequency in self.freqs_played:
-			self.freqs_played.remove(frequency)
-			self.notes_played.remove(note)
+		if frequency not in self.freqs_decrescendo.keys():
+			volume = 1
+			if frequency in self.freqs_crescendo:
+				volume = self.freqs_crescendo[frequency][2]
+			self.freqs_decrescendo[frequency] = [time.time(), volume, volume]
 			self.keys_pressed.remove(key)
-
-		if frequency not in self.freqs_decrescendo:
-			self.freqs_decrescendo.append((frequency, time.time()))
+			self.notes_played.remove(note)	
+			self.freqs_crescendo.pop(frequency, None)
+			if frequency in self.freqs_played:
+				self.freqs_played.remove(frequency)
 
 		if key == Key.esc:
 			self.end = True
@@ -172,11 +202,11 @@ class Accordion():
 ###################################   MAIN   ###############################################
 
 
-def callback(outdata, frames, time, status):
-	print("Notes played : ", my_accordion.notes_played)
-	t = ((my_accordion.start_idx + np.arange(frames)) / my_accordion.sample_rate).reshape(-1,1)
-	my_accordion.start_idx += frames  # frames = 384 
-	outdata[:] = my_accordion.volume * my_accordion.get_sound_from_freq(t)
+	def sound_generation_callback(self, outdata, frames, time, status):
+		print("Notes played : ", self.notes_played)
+		t = ((self.start_idx + np.arange(frames)) / self.sample_rate).reshape(-1,1)
+		self.start_idx += frames  # frames = 384 
+		outdata[:] = self.volume * self.get_sound_from_freq(t)
 
 
 
@@ -186,10 +216,11 @@ def callback(outdata, frames, time, status):
 ########################################################################################
 
 if __name__ == "__main__":
+	# "diapason", "accordion", "carillon", "orgue_synthé"
+	# "une_main", "deux_mains"
+	my_accordion = Accordion(sound_library = "orgue_synthé", configuration = "une_main")
 
-	my_accordion = Accordion(sound_library = "diapason", configuration = "une_main")
-
-	with sd.OutputStream(channels=2, callback=callback, samplerate=my_accordion.sample_rate):
+	with sd.OutputStream(channels=2, callback=my_accordion.sound_generation_callback, samplerate=my_accordion.sample_rate):
 
 		while not my_accordion.end:
 			time.sleep(0.1)
