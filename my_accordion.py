@@ -20,7 +20,7 @@ def get_freq_from(note):
 	else:
 		gamme = ['Do', 'Do#', 'Re', 'Re#', 'Mi', 'Fa', 'Fa#', 'Sol', 'Sol#', 'La', 'La#', 'Si']
 		note_index = gamme.index(note[:-1])
-		note_scale = eval(note[-1])		
+		note_scale = eval(note[-1])  -1	# constant to adjust scale	
 		note_freq = 440 * 2**((note_scale-3)+(note_index-9)/12)
 		return note_freq
 
@@ -266,23 +266,23 @@ def get_sound_from_freq(sample_time, freqs_played):
 	global freqs_decrescendo
 
 	new_sound = 0*sample_time
+	harmonics = get_harmonics("accordéon") 
 
 	for freq in freqs_played:
-		new_sound += np.sin(2*np.pi*sample_time*freq) \
-					+ 0.6 * np.sin(2*np.pi*sample_time*freq*2**(-1)) \
-					+ 0.8 * np.sin(2*np.pi*sample_time*freq*2**(1))  \
-					+ 0.4 * np.sin(2*np.pi*sample_time*freq*2**(2))  \
-					+ 0.4 * np.sin(2*np.pi*sample_time*freq*2**(3))  \
-					+ 0.6 * np.sin(2*np.pi*sample_time*freq*2**(7/12))
+		new_sound += np.sin(2*np.pi*sample_time*freq) 
+
+		for alpha_n, power in harmonics:
+			# new_sound += power * np.sin(2*np.pi*sample_time*freq*2**harmonic)
+			new_sound += power * np.sin(2*np.pi*sample_time*freq*alpha_n)
 
 	for freq, release_time in freqs_decrescendo:
 		volume = np.exp(-(time.time()-release_time)/0.2)
-		new_sound += volume * (np.sin(2*np.pi*sample_time*freq) \
-								+ 0.6 * np.sin(2*np.pi*sample_time*freq*2**(-1)) \
-								+ 0.8 * np.sin(2*np.pi*sample_time*freq*2**(1))  \
-								+ 0.4 * np.sin(2*np.pi*sample_time*freq*2**(2))  \
-								+ 0.4 * np.sin(2*np.pi*sample_time*freq*2**(3))  \
-								+ 0.6 * np.sin(2*np.pi*sample_time*freq*2**(7/12)))
+		new_sound += volume * np.sin(2*np.pi*sample_time*freq)
+
+		for alpha_n, power in harmonics:
+			# new_sound += volume * power * np.sin(2*np.pi*sample_time*freq*2**harmonic) # with tonal distance
+			new_sound += volume * power * np.sin(2*np.pi*sample_time*freq*alpha_n) # with freq ratio
+
 		if volume < 0.01:
 			freqs_decrescendo.remove((freq, release_time))
 
@@ -294,7 +294,7 @@ def on_press(key):
 	global end, freqs_played, notes_played
 
 	# print("New key : ", key)
-	note = get_note_from_2(key)
+	note = get_note_from(key)
 	frequency = get_freq_from(note)
 
 	if frequency not in freqs_played:
@@ -309,7 +309,7 @@ def on_press(key):
 def on_release(key):
 	global end, freqs_played, notes_played, freqs_decrescendo
 
-	note = get_note_from_2(key)
+	note = get_note_from(key)
 	frequency = get_freq_from(note)
 
 	if frequency in freqs_played:
@@ -343,6 +343,20 @@ def callback(outdata, frames, time, status):
 	start_idx += frames  # frames = 384 
 	outdata[:] = volume * get_sound_from_freq(t, freqs_played)
 	freqs_played_prev = freqs_played
+
+
+
+def get_harmonics(instrument):
+	if instrument == "carillon":
+		harmonics = [(0.5,0.552), (1.2,0.75), (1.5,0.08), (2,0.88), (2.5,0.12), (2.6,0.05), (2.7,0.15), \
+				 (3,0.47), (3.3,0.08), (3.7,0.06), (5.1,0.11), (6.3,0.19), (7.6,0.1), (8.7,0.03)]
+
+	if instrument == "accordéon":
+		harmonics = [(2.0, 0.18), (3.0, 1.11), (4.0, 0.47), (5.0, 0.20), (6.0, 0.36), (7.0, 0.48), \
+					 (8.0, 0.22), (9.0, 0.13), (10.0, 0.06), (11.0, 0.054), (12.0, 0.045), (13.0, 0.036), \
+					 (14.0, 0.038), (16.0, 0.027), (17.0, 0.033), (18.0, 0.033)]
+
+	return harmonics
 
 
 
