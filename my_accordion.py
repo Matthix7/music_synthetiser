@@ -24,12 +24,7 @@ def get_freq_from(note):
 		note_freq = 440 * 2**((note_scale-3)+(note_index-9)/12)
 		return note_freq
 
-############################################################################################
-###########################  Relation temps - volume  ######################################
-def update_volumes(volumes):
-	for freq in volumes:
-		volumes[freq] *= 0.1
-	return volumes
+
 
 ############################################################################################
 ##########################   Relation clavier - note   #####################################
@@ -269,6 +264,7 @@ def get_note_from_2(key):
 			note = 'None'
 	return note
 
+
 ############################################################################################
 ################   Relation fréquence (fondamentale) - son   ###############################
 
@@ -285,34 +281,19 @@ def get_sound_from_freq(time, freqs_played):
 
 
 ############################################################################################
-#########################   Mise à jour de l'audio   #######################################
-
-def callback(outdata, frames, time, status):
-	global start_idx, freqs_played, freqs_played_prev, volume, sample_rate, notes_played
-	print("Notes played : ", notes_played)
-	# print("Keys pressed : ", keys_pressed)
-	# print("with frequencies : ", freqs_played,'\n')
-	t = ((start_idx + np.arange(frames)) / sample_rate).reshape(-1,1)
-	start_idx += frames  # frames = 384 
-	outdata[:] = get_sound_from_freq(t, freqs_played)
-	freqs_played_prev = freqs_played
-
-
-############################################################################################
 ########################   Surveillance du clavier   #######################################
 
 def on_press(key):
-	global end, freqs_played, notes_played, t
+	global end, freqs_played, notes_played
 
 	# print("New key : ", key)
 	note = get_note_from_2(key)
 	frequency = get_freq_from(note)
-	volumes[frequency] = 1
+
 	if frequency not in freqs_played:
 		freqs_played.append(frequency)		
 		notes_played.append(note)
 		keys_pressed.append(key)
-
 
 def on_release(key):
 	global end, freqs_played, notes_played
@@ -329,10 +310,22 @@ def on_release(key):
 		end = True
 		return False
 
-
-
 keyboardListener = keyboard.Listener(on_press=on_press, on_release = on_release)
 keyboardListener.start()
+
+
+############################################################################################
+#########################   Mise à jour de l'audio   #######################################
+
+def callback(outdata, frames, time, status):
+	global start_idx, freqs_played, freqs_played_prev, volume, sample_rate, notes_played
+	print("Notes played : ", notes_played)
+	# print("Keys pressed : ", keys_pressed)
+	# print("with frequencies : ", freqs_played,'\n')
+	t = ((start_idx + np.arange(frames)) / sample_rate).reshape(-1,1)
+	start_idx += frames  # frames = 384 
+	outdata[:] = volume * get_sound_from_freq(t, freqs_played)
+	freqs_played_prev = freqs_played
 
 
 ############################################################################################
@@ -340,10 +333,9 @@ keyboardListener.start()
 
 def main():
 	global end, start_idx, freqs_played, notes_played, \
-		   keys_pressed, volume, sample_rate, sound, \
-		   freqs_played_prev, volumes
+		   keys_pressed, volume, sample_rate, sound, freqs_played_prev
 	### Variables initialisation
-	volumes = {} 
+	volume = 0.1    # range [0.0, 1.0]
 	sample_rate = 44100       # sampling rate, Hz, must be integer
 	end = False
 	start_idx = 0
@@ -356,8 +348,7 @@ def main():
 	with sd.OutputStream(channels=2, callback=callback, samplerate=sample_rate):
 
 		while not end:
-			time.sleep(0.1)
-			volumes = update_volumes(volumes)
+			time.sleep(0.2)
 
 
 ########################################################################################
