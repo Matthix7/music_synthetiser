@@ -24,10 +24,8 @@ def get_freq_from(note):
 		note_freq = 440 * 2**((note_scale-3)+(note_index-9)/12)
 		return note_freq
 
-
-
 ############################################################################################
-##########################   Relation clavier - note   #####################################
+############################   Keyboard monitoring   #######################################
 
 def get_note_from(key):
 	try:		
@@ -264,24 +262,33 @@ def get_note_from_2(key):
 			note = 'None'
 	return note
 
+def get_sound_from_freq(sample_time, freqs_played):
+	global freqs_decrescendo
 
-############################################################################################
-################   Relation fréquence (fondamentale) - son   ###############################
+	new_sound = 0*sample_time
 
-def get_sound_from_freq(time, freqs_played):
-	new_sound = 0*time
 	for freq in freqs_played:
-		new_sound += np.sin(2*np.pi*time*freq) \
-					+ 0.6 * np.sin(2*np.pi*time*freq*2**(-1)) \
-					+ 0.8 * np.sin(2*np.pi*time*freq*2**(1))  \
-					+ 0.4 * np.sin(2*np.pi*time*freq*2**(2))  \
-					+ 0.4 * np.sin(2*np.pi*time*freq*2**(3))  \
-					+ 0.6 * np.sin(2*np.pi*time*freq*2**(7/12))
+		new_sound += np.sin(2*np.pi*sample_time*freq) \
+					+ 0.6 * np.sin(2*np.pi*sample_time*freq*2**(-1)) \
+					+ 0.8 * np.sin(2*np.pi*sample_time*freq*2**(1))  \
+					+ 0.4 * np.sin(2*np.pi*sample_time*freq*2**(2))  \
+					+ 0.4 * np.sin(2*np.pi*sample_time*freq*2**(3))  \
+					+ 0.6 * np.sin(2*np.pi*sample_time*freq*2**(7/12))
+
+	for freq, release_time in freqs_decrescendo:
+		volume = np.exp(-(time.time()-release_time)/0.2)
+		new_sound += volume * (np.sin(2*np.pi*sample_time*freq) \
+								+ 0.6 * np.sin(2*np.pi*sample_time*freq*2**(-1)) \
+								+ 0.8 * np.sin(2*np.pi*sample_time*freq*2**(1))  \
+								+ 0.4 * np.sin(2*np.pi*sample_time*freq*2**(2))  \
+								+ 0.4 * np.sin(2*np.pi*sample_time*freq*2**(3))  \
+								+ 0.6 * np.sin(2*np.pi*sample_time*freq*2**(7/12)))
+		if volume < 0.01:
+			freqs_decrescendo.remove((freq, release_time))
+
 	return new_sound
 
 
-############################################################################################
-########################   Surveillance du clavier   #######################################
 
 def on_press(key):
 	global end, freqs_played, notes_played
@@ -295,8 +302,12 @@ def on_press(key):
 		notes_played.append(note)
 		keys_pressed.append(key)
 
+	if frequency in freqs_decrescendo:
+		freqs_decrescendo.remove(frequency)
+
+
 def on_release(key):
-	global end, freqs_played, notes_played
+	global end, freqs_played, notes_played, freqs_decrescendo
 
 	note = get_note_from_2(key)
 	frequency = get_freq_from(note)
@@ -306,16 +317,22 @@ def on_release(key):
 		notes_played.remove(note)
 		keys_pressed.remove(key)
 
+	if frequency not in freqs_decrescendo:
+		freqs_decrescendo.append((frequency, time.time()))
+
 	if key == Key.esc:
 		end = True
 		return False
+
+
 
 keyboardListener = keyboard.Listener(on_press=on_press, on_release = on_release)
 keyboardListener.start()
 
 
 ############################################################################################
-#########################   Mise à jour de l'audio   #######################################
+###################################   MAIN   ###############################################
+
 
 def callback(outdata, frames, time, status):
 	global start_idx, freqs_played, freqs_played_prev, volume, sample_rate, notes_played
@@ -328,21 +345,22 @@ def callback(outdata, frames, time, status):
 	freqs_played_prev = freqs_played
 
 
-############################################################################################
-###################################   MAIN   ###############################################
 
 def main():
 	global end, start_idx, freqs_played, notes_played, \
-		   keys_pressed, volume, sample_rate, sound, freqs_played_prev
+		   keys_pressed, volume, sample_rate, sound, \
+		   freqs_played_prev, volumes_of_notes, freqs_decrescendo
 	### Variables initialisation
 	volume = 0.1    # range [0.0, 1.0]
 	sample_rate = 44100       # sampling rate, Hz, must be integer
 	end = False
 	start_idx = 0
 	freqs_played = []
+	freqs_decrescendo = []
 	freqs_played_prev = []
 	notes_played = []
 	keys_pressed = []
+	volumes_of_notes = {}
 	sound = np.zeros((384,1))
 
 	with sd.OutputStream(channels=2, callback=callback, samplerate=sample_rate):
