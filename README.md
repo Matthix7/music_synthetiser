@@ -21,7 +21,7 @@ Two (AZERTY) configurations are currently available, both with an *accordion-sty
 ## Playing Music
 ### On Ubuntu
  - Open a terminal
- - Install the requirements : `sudo apt update && pip install pynput && python3 -m pip install sounddevice`
+ - Install the requirements : `sudo apt update && pip install pynput && sudo apt install libportaudio2 && pip install sounddevice` with pip corresponding to Python3
  - Got into folder `Music_Scripts`
  - Type `python3 my_accordion.py`
  - Have fun !
