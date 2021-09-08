@@ -11,8 +11,9 @@ import numpy as np
 import time
 from pynput import keyboard
 from pynput.keyboard import Key
-import single_keyboard
-import double_keyboard
+import single_chromatic_keyboard
+import double_chromatic_keyboard
+import double_chords_keyboard
 
 
 class Accordion():
@@ -64,21 +65,35 @@ class Accordion():
         self.keyboard_configuration = configuration
 
         if self.keyboard_configuration == "single":
-            self.keys_to_notes = single_keyboard.keyboard
+            self.keys_to_notes = single_chromatic_keyboard.keyboard
         elif self.keyboard_configuration == "double":
-            self.keys_to_notes = double_keyboard.keyboard
+            self.keys_to_notes = double_chromatic_keyboard.keyboard
+        elif self.keyboard_configuration == "chords":
+            self.keys_to_notes = double_chords_keyboard.keyboard
         else:
             raise Exception("Configuration not understood.")
 
     #  Notes to frequencies
     def get_freq_from_note(self, note):
         if note == "None":
-            return 0
+            return [0]
+        elif note[-2] in ['M', 'm']:
+            note_index = self.gamme.index(note[:-2])
+            note_scale = eval(note[-1]) - 1    # constant to adjust scale
+            accord_freqs = [440 * 2**((note_scale-3)+(note_index-9)/12)]
+            if note[-2] == 'm':
+                accord_freqs.append(440 * 2**((note_scale-3) +
+                                              (note_index+3-9)/12))
+            if note[-2] == 'M':
+                accord_freqs.append(440 * 2**((note_scale-3) +
+                                              (note_index+4-9)/12))
+            accord_freqs.append(440 * 2**((note_scale-3)+(note_index+7-9)/12))
+            return accord_freqs
         else:
             note_index = self.gamme.index(note[:-1])
             note_scale = eval(note[-1]) - 1    # constant to adjust scale
             note_freq = 440 * 2**((note_scale-3)+(note_index-9)/12)
-            return note_freq
+            return [note_freq]
 
     #   Keyboard monitoring
     def get_note_from_key(self, key):
@@ -157,39 +172,42 @@ class Accordion():
 
     def on_press(self, key):
         note = self.get_note_from_key(key)
-        frequency = self.get_freq_from_note(note)
+        frequencies = self.get_freq_from_note(note)
 
-        if frequency not in self.freqs_crescendo.keys() \
-                and frequency not in self.freqs_played:
-            volume = 0
-            if frequency in self.freqs_decrescendo:
-                self.decrescendo_ended.append(frequency)
-                volume = self.freqs_decrescendo[frequency][2]
-            self.crescendo_beginning.append([frequency,
-                                             time.time(),
-                                             volume,
-                                             volume])
-            self.keys_pressed.append(key)
-            self.notes_played.append(note)
+        for frequency in frequencies:
+            if frequency not in self.freqs_crescendo.keys() \
+                    and frequency not in self.freqs_played:
+                volume = 0
+                if frequency in self.freqs_decrescendo:
+                    self.decrescendo_ended.append(frequency)
+                    volume = self.freqs_decrescendo[frequency][2]
+                self.crescendo_beginning.append([frequency,
+                                                 time.time(),
+                                                 volume,
+                                                 volume])
+        self.notes_played.append(note)
+        self.keys_pressed.append(key)
 
     def on_release(self, key):
         note = self.get_note_from_key(key)
-        frequency = self.get_freq_from_note(note)
+        frequencies = self.get_freq_from_note(note)
 
-        if frequency not in self.freqs_decrescendo.keys():
-            volume = 1
-            if frequency in self.freqs_crescendo:
-                self.crescendo_ended.append(frequency)
-                volume = self.freqs_crescendo[frequency][2]
-            self.decrescendo_beginning.append([frequency,
-                                               time.time(),
-                                               volume,
-                                               volume])
-            self.freqs_decrescendo[frequency] = [time.time(), volume, volume]
-            self.keys_pressed.remove(key)
-            self.notes_played.remove(note)
-            if frequency in self.freqs_played:
-                self.freqs_played.remove(frequency)
+        for frequency in frequencies:
+            if frequency not in self.freqs_decrescendo.keys():
+                volume = 1
+                if frequency in self.freqs_crescendo:
+                    self.crescendo_ended.append(frequency)
+                    volume = self.freqs_crescendo[frequency][2]
+                self.decrescendo_beginning.append([frequency,
+                                                   time.time(),
+                                                   volume,
+                                                   volume])
+                self.freqs_decrescendo[frequency] = [time.time(),
+                                                     volume, volume]
+                if frequency in self.freqs_played:
+                    self.freqs_played.remove(frequency)
+        self.notes_played.remove(note)
+        self.keys_pressed.remove(key)
 
         if key == Key.esc:
             self.end = True
@@ -233,7 +251,7 @@ if __name__ == "__main__":
     # "diapason", "accordion", "carillon", "custom_synthetiser"
     # "single", "double"
     my_accordion = Accordion(sound_library="custom_synthetiser",
-                             configuration="double")
+                             configuration="chords")
 
     with sd.OutputStream(channels=2,
                          callback=my_accordion.sound_generation_callback,
