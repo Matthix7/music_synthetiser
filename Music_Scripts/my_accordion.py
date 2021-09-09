@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 """
 Created on Thu Apr 16 13:18:06 2020
 Changed architecture to OOP on Mon Apr 19 22:30:00 2021
@@ -25,14 +26,14 @@ class Accordion():
         self.volume = 0.05    # range [0.0, 1.0], keep low to avoid saturation
         self.end = False
         self.start_idx = 0
-        self.freqs_played = []
+        self.buttons_stabilised = []
         self.crescendo_beginning = []
         self.decrescendo_beginning = []
         self.crescendo_ended = []
         self.decrescendo_ended = []
-        self.freqs_crescendo = dict()
+        self.buttons_crescendo = dict()
         # {freq : [press_time, volume, current_volume]}
-        self.freqs_decrescendo = dict()
+        self.buttons_decrescendo = dict()
         # {freq : [release_time, volume, current_volume]}
         self.notes_played = []
         self.keys_pressed = []
@@ -113,101 +114,108 @@ class Accordion():
         # self.freqs_played,
         # self.freqs_decrescendo)
 
-        for frequency, press_time, initial_volume, current_volume\
+        for key, press_time, initial_volume, current_volume\
                 in self.crescendo_beginning:
-            self.freqs_crescendo[frequency] = [press_time,
-                                               initial_volume,
-                                               current_volume]
+            self.buttons_crescendo[key] = [press_time,
+                                           initial_volume,
+                                           current_volume]
         self.crescendo_beginning = []
 
-        for frequency, press_time, initial_volume, current_volume\
+        for key, press_time, initial_volume, current_volume\
                 in self.decrescendo_beginning:
-            self.freqs_decrescendo[frequency] = [press_time,
-                                                 initial_volume,
-                                                 current_volume]
+            self.buttons_decrescendo[key] = [press_time,
+                                             initial_volume,
+                                             current_volume]
         self.decrescendo_beginning = []
 
-        for freq in self.freqs_played:
-            new_sound += np.sin(2*np.pi*sample_time*freq)
-            for alpha_n, power in harmonics:
-                new_sound += power * np.sin(2*np.pi*sample_time*freq*alpha_n)
+        for key in self.buttons_stabilised:
+            note = self.get_note_from_key(key)
+            frequencies = self.get_freq_from_note(note)
+            for frequency in frequencies:
+                new_sound += np.sin(2*np.pi*sample_time*frequency)
+                for alpha_n, power in harmonics:
+                    new_sound += power * np.sin(2*np.pi *
+                                                sample_time*frequency*alpha_n)
 
-        for freq in self.freqs_crescendo:
+        for key in self.buttons_crescendo:
             press_time, initial_volume, current_volume =\
-                self.freqs_crescendo[freq]
+                self.buttons_crescendo[key]
             volume = 1 - (1-initial_volume) * \
                 np.exp(-(time.time()-press_time)/self.crescendo_duration)
-            self.freqs_crescendo[freq][2] = volume
-            new_sound += volume * np.sin(2*np.pi*sample_time*freq)
-            for alpha_n, power in harmonics:
-                new_sound += volume * power *\
-                    np.sin(2*np.pi*sample_time*freq*alpha_n)
+            self.buttons_crescendo[key][2] = volume
+            note = self.get_note_from_key(key)
+            frequencies = self.get_freq_from_note(note)
+            for frequency in frequencies:
+                new_sound += volume * np.sin(2*np.pi*sample_time*frequency)
+                for alpha_n, power in harmonics:
+                    new_sound += volume * power *\
+                        np.sin(2*np.pi*sample_time*frequency*alpha_n)
             if volume > 0.99:
-                self.crescendo_ended.append(freq)
+                self.crescendo_ended.append(key)
 
-        for freq in self.crescendo_ended:
-            self.freqs_crescendo.pop(freq, None)
-            if freq not in self.freqs_decrescendo:
-                self.freqs_played.append(freq)
+        for key in self.crescendo_ended:
+            self.buttons_crescendo.pop(key, None)
+            if key not in self.buttons_decrescendo:
+                self.buttons_stabilised.append(key)
         self.crescendo_ended = []
 
-        for freq in self.freqs_decrescendo:
+        for key in self.buttons_decrescendo:
             release_time, initial_volume, current_volume =\
-                self.freqs_decrescendo[freq]
+                self.buttons_decrescendo[key]
             volume = initial_volume * \
                 np.exp(-(time.time()-release_time)/self.decrescendo_duration)
-            self.freqs_decrescendo[freq][2] = volume
-            new_sound += volume * np.sin(2*np.pi*sample_time*freq)
-            for alpha_n, power in harmonics:
-                new_sound += volume * power *\
-                    np.sin(2*np.pi*sample_time*freq*alpha_n)
+            self.buttons_decrescendo[key][2] = volume
+            note = self.get_note_from_key(key)
+            frequencies = self.get_freq_from_note(note)
+            for frequency in frequencies:
+                new_sound += volume * np.sin(2*np.pi*sample_time*frequency)
+                for alpha_n, power in harmonics:
+                    new_sound += volume * power *\
+                        np.sin(2*np.pi*sample_time*frequency*alpha_n)
             if volume < 0.01:
-                self.decrescendo_ended.append(freq)
+                self.decrescendo_ended.append(key)
 
-        for freq in self.decrescendo_ended:
-            self.freqs_decrescendo.pop(freq, None)
+        for key in self.decrescendo_ended:
+            self.buttons_decrescendo.pop(key, None)
         self.decrescendo_ended = []
 
         return new_sound
 
     def on_press(self, key):
         note = self.get_note_from_key(key)
-        frequencies = self.get_freq_from_note(note)
+        # frequency = self.get_freq_from_note(note)
 
-        for frequency in frequencies:
-            if frequency not in self.freqs_crescendo.keys() \
-                    and frequency not in self.freqs_played:
-                volume = 0
-                if frequency in self.freqs_decrescendo:
-                    self.decrescendo_ended.append(frequency)
-                    volume = self.freqs_decrescendo[frequency][2]
-                self.crescendo_beginning.append([frequency,
-                                                 time.time(),
-                                                 volume,
-                                                 volume])
-        self.notes_played.append(note)
-        self.keys_pressed.append(key)
+        if key not in self.buttons_crescendo.keys()\
+                and key not in self.buttons_stabilised:
+            volume = 0
+            if key in self.buttons_decrescendo:
+                self.decrescendo_ended.append(key)
+                volume = self.buttons_decrescendo[key][2]
+            self.crescendo_beginning.append([key,
+                                             time.time(),
+                                             volume,
+                                             volume])
+            # self.keys_pressed.append(key)
+            self.notes_played.append(note)
 
     def on_release(self, key):
         note = self.get_note_from_key(key)
-        frequencies = self.get_freq_from_note(note)
+        # frequency = self.get_freq_from_note(note)
 
-        for frequency in frequencies:
-            if frequency not in self.freqs_decrescendo.keys():
-                volume = 1
-                if frequency in self.freqs_crescendo:
-                    self.crescendo_ended.append(frequency)
-                    volume = self.freqs_crescendo[frequency][2]
-                self.decrescendo_beginning.append([frequency,
-                                                   time.time(),
-                                                   volume,
-                                                   volume])
-                self.freqs_decrescendo[frequency] = [time.time(),
-                                                     volume, volume]
-                if frequency in self.freqs_played:
-                    self.freqs_played.remove(frequency)
-        self.notes_played.remove(note)
-        self.keys_pressed.remove(key)
+        if key not in self.buttons_decrescendo.keys():
+            volume = 1
+            if key in self.buttons_crescendo:
+                self.crescendo_ended.append(key)
+                volume = self.buttons_crescendo[key][2]
+            self.decrescendo_beginning.append([key,
+                                               time.time(),
+                                               volume,
+                                               volume])
+            self.buttons_decrescendo[key] = [time.time(), volume, volume]
+            # self.keys_pressed.remove(key)
+            self.notes_played.remove(note)
+            if key in self.buttons_stabilised:
+                self.buttons_stabilised.remove(key)
 
         if key == Key.esc:
             self.end = True
