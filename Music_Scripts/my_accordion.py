@@ -46,9 +46,10 @@ class Accordion():
         self.keyboardListener.start()
 
         self.sound_library = sound_library
+        self.switcher_pressed = False
 
         if sound_library == "diapason":
-            self.crescendo_duration = 1
+            self.crescendo_duration = 0.01
             self.decrescendo_duration = 1
 
         if sound_library == "accordion":
@@ -63,13 +64,17 @@ class Accordion():
             self.crescendo_duration = 0.01
             self.decrescendo_duration = 0.2
 
+        if sound_library == "piano":
+            self.crescendo_duration = 0.01
+            self.decrescendo_duration = 0.3
+
         self.keyboard_configuration = configuration
 
-        if self.keyboard_configuration == "single":
+        if self.keyboard_configuration == "single_chromatic_keyboard":
             self.keys_to_notes = single_chromatic_keyboard.keyboard
-        elif self.keyboard_configuration == "double":
+        elif self.keyboard_configuration == "double_chromatic_keyboard":
             self.keys_to_notes = double_chromatic_keyboard.keyboard
-        elif self.keyboard_configuration == "chords":
+        elif self.keyboard_configuration == "double_chords_keyboard":
             self.keys_to_notes = double_chords_keyboard.keyboard
         else:
             raise Exception("Configuration not understood.")
@@ -110,9 +115,6 @@ class Accordion():
     def get_sound_from_freq(self, sample_time):
         new_sound = 0*sample_time
         harmonics = self.get_harmonics(self.sound_library)
-        # print(self.freqs_crescendo,
-        # self.freqs_played,
-        # self.freqs_decrescendo)
 
         for key, press_time, initial_volume, current_volume\
                 in self.crescendo_beginning:
@@ -197,6 +199,13 @@ class Accordion():
                                              volume])
             # self.keys_pressed.append(key)
             self.notes_played.append(note)
+        if key == Key.space and not self.switcher_pressed\
+                and "double" in self.keyboard_configuration:
+            self.keyboard_configuration = "double_chords_keyboard"\
+                if self.keyboard_configuration == "double_chromatic_keyboard"\
+                else "double_chromatic_keyboard"
+            exec(f"self.keys_to_notes={self.keyboard_configuration}.keyboard")
+            self.switcher_pressed = True
 
     def on_release(self, key):
         note = self.get_note_from_key(key)
@@ -216,6 +225,9 @@ class Accordion():
             self.notes_played.remove(note)
             if key in self.buttons_stabilised:
                 self.buttons_stabilised.remove(key)
+
+        if key == Key.space and self.switcher_pressed:
+            self.switcher_pressed = False
 
         if key == Key.esc:
             self.end = True
@@ -243,6 +255,11 @@ class Accordion():
                          (3.0, 1.11), (4.0, 0.47), (5.0, 0.20), (6.0, 0.36),
                          (7.0, 0.48), (8.0, 0.22), (9.0, 0.13), (10.0, 0.06),
                          (11.0, 0.054)]
+
+        if instrument == "piano":
+            harmonics = [(2.0, 0.4), (3.0, 0.2), (4.0, 0.08), (5.0, 0.05),
+                         (6.0, 0.02), (7.0, 0.01)]
+
         return harmonics
 
     # Continuously called callback
@@ -258,8 +275,8 @@ class Accordion():
 if __name__ == "__main__":
     # "diapason", "accordion", "carillon", "custom_synthetiser"
     # "single", "double"
-    my_accordion = Accordion(sound_library="custom_synthetiser",
-                             configuration="chords")
+    my_accordion = Accordion(sound_library="piano",
+                             configuration="double_chords_keyboard")
 
     with sd.OutputStream(channels=2,
                          callback=my_accordion.sound_generation_callback,
