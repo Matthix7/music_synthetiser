@@ -184,6 +184,7 @@ class Accordion():
         return new_sound
 
     def on_press(self, key):
+        # print(key)
         note = self.get_note_from_key(key)
         # frequency = self.get_freq_from_note(note)
 

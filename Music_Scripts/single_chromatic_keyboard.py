@@ -36,5 +36,6 @@ keyboard = \
         '=': 'Si4',
         'ù': 'Do5',
         '$': 'Do#5',
-        Key.backspace: 'Re5'
+        Key.backspace: 'Re5',
+        Key.enter: 'Mi5'
     }

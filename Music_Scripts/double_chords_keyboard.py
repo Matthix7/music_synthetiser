@@ -23,7 +23,10 @@ keyboard = \
         'a': 'Do3',
         'q': 'DoM3',
         'w': 'Dom3',
+        '²': 'La3',
+        Key.tab: 'Fa3',
         Key.caps_lock: 'FaM3',
+        '<': 'Fam3',
 
         # Main droite
         '-': 'Fa3',
@@ -46,5 +49,6 @@ keyboard = \
         '=': 'Si4',
         'ù': 'Do5',
         '$': 'Do#5',
-        Key.backspace: 'Re5'
+        Key.backspace: 'Re5',
+        Key.enter: 'Mi5'
     }
